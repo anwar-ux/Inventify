@@ -165,7 +165,7 @@ class Privacypolicy extends StatelessWidget {
                 SizedBox(height: 8),
                 Text(
                   'If you have any questions about this Privacy Policy, contact us at inventify07@gmail.com',
-                  style: TextStyle(fontSize: 16),
+                  style: TextStyle(fontSize: 56),
                 ),
              
               ],

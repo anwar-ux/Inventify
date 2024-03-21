@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
@@ -28,13 +31,32 @@ class _HomeState extends State<Home> {
   Map<String, int> sortedtotal = {};
   int alltotalPrice = 0;
   int todayRevenue = 0; // Added variable for today's revenue
-
+  final ScrollController _controller = ScrollController();
+  int currentIndex = 0;
+  bool reverse = false;
   @override
   void initState() {
     super.initState();
     Hive.openBox<Bill>('bill_db');
     loadData();
     setState(() {});
+    Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (_controller.hasClients) {
+        if (currentIndex < sortedProductMap.length - 1 && !reverse) {
+          currentIndex++;
+        } else if (currentIndex > 0 && reverse) {
+          currentIndex--;
+        } else {
+          reverse = !reverse;
+          currentIndex = reverse ? sortedProductMap.length - 1 : 0;
+        }
+        _controller.animateTo(
+          currentIndex * 330.0,
+          duration: const Duration(seconds: 1),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   Future<void> loadData() async {
@@ -206,37 +228,64 @@ class _HomeState extends State<Home> {
                             ),
                           );
                         },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            width: MediaQuery.of(context).size.width / 2.3,
-                            color: Theme.of(context).colorScheme.primary,
-                            child: Center(
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Recent Bills',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .background,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.receipt_long,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .background,
-                                    size: 25,
-                                  )
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                        child:ValueListenableBuilder<List<Bill>>(
+  valueListenable: billListNotifier,
+  builder: (context, billList, _) {
+    if (billList.isEmpty) {
+      return Container(); // Empty container when there are no bills
+    } else {
+      // Retrieve the last bill in the list
+      final lastBill = billList.last;
+      
+      // Example: accessing customer phone number and product details
+      final customerPhoneNumber = lastBill.phone;
+      final productDetails = lastBill.totalprice;
+
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: MediaQuery.of(context).size.width / 2.3,
+          color: Theme.of(context).colorScheme.primary,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Recent Bill',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.background,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'Customer Phone:\n   $customerPhoneNumber',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.background,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text(
+                  'Total price: $productDetails',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.background,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  },
+)
+
+
                       ),
                     ],
                   ),
@@ -269,7 +318,7 @@ class _HomeState extends State<Home> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18),
                             ),
-                            SizedBox(
+                            const SizedBox(
                               width: 5,
                             ),
                             Icon(
@@ -298,69 +347,95 @@ class _HomeState extends State<Home> {
               const SizedBox(
                 height: 8,
               ),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  height: 210,
-                  color: Theme.of(context).colorScheme.primary,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width / 1.85,
-                          child: PieChart(
-                            PieChartData(
-                              borderData: FlBorderData(show: false),
-                              sectionsSpace: 2,
-                              centerSpaceRadius: 34,
-                              sections: generatePieSections(),
-                              // sectionsTextStyle: const TextStyle(
-                              //   fontSize: 12,
-                              //   color: Colors.white,
-                              // ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Container(
-                            color: Theme.of(context).colorScheme.primary,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(20.0),
-                                child: ListView.builder(
-                                  itemCount: sortedProductMap.length,
-                                  itemBuilder: (context, index) {
-                                    // Display the top 5 sold products
-                                    if (index < 5) {
-                                      var productName = sortedProductMap.keys
-                                          .elementAt(index);
-                                      var productCount = sortedProductMap.values
-                                          .elementAt(index);
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 8),
-                                        child: Text(
-                                          '$productName  $productCount',
-                                          style: TextStyle(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                controller: _controller,
+                child: Row(
+                  children: List.generate(
+                    sortedProductMap.length,
+                    (index) {
+                      // Display the top 5 sold products horizontally
+                      if (index < 5) {
+                        var productName =
+                            sortedProductMap.keys.elementAt(index);
+                        var productCount =
+                            sortedProductMap.values.elementAt(index);
+
+                        // Find the product in the product list notifier
+                        var product = productsListNotifier.value.firstWhere(
+                          (product) => product.name == productName,
+                        );
+
+                        // Get the image string if the product exists
+                        String productImageString = product.image!;
+
+                        return Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: SizedBox(
+                              width: 320,
+                              child: ListView(
+                                shrinkWrap: true,
+                                children: [
+                                  Container(
+                                    height:
+                                        200, // Height of the product container
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      image: productImageString != null
+                                          ? DecorationImage(
+                                              image: FileImage(
+                                                  File(productImageString)),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null, // Use default image if product image string is not available
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(
+                                              height:
+                                                  10), // Spacer for product image
+                                          // Display product name
+                                          Text(
+                                            productName,
+                                            style: const TextStyle(
+                                              letterSpacing: 1.5,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 25,
+                                              color: AppColors.secondaryColor,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          // Display product count
+                                          Text(
+                                            '$productCount',
+                                            style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               color: Theme.of(context)
                                                   .colorScheme
                                                   .background,
-                                              fontSize: 16),
-                                        ),
-                                      );
-                                    } else {
-                                      return const SizedBox(); // Empty container for additional items
-                                    }
-                                  },
-                                ),
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                            ));
+                      } else {
+                        return const SizedBox(); // Empty container for additional items
+                      }
+                    },
                   ),
                 ),
               ),

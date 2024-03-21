@@ -90,7 +90,7 @@ filteredList.sort((a, b) {
                         shrinkWrap: true,
                         itemCount: filteredList.length,
                         itemBuilder: (context, index) {
-                          final data = filteredList[index];
+                          final data = filteredList.reversed.toList()[index];
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 15),
                             child: Dismissible(
